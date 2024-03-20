@@ -1,0 +1,79 @@
+version: '1.0'
+
+services:
+  laravel-app:
+    container_name: laravel-app
+    image: laravel-app
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development # Only will build development stage from our dockerfile
+    volumes:
+      - ./:/var/www/html
+    ports:
+      - ${PORT}:${PORT}
+    networks:
+      - laravel-network
+    env_file:
+      - .env # Available inside container not in compose file
+    environment:
+      - DB_HOST=laravel-mysql
+      - REDIS_HOST=laravel-redis
+    depends_on:
+      laravel-mysql:
+        condition: service_healthy
+      laravel-redis:
+        condition: service_healthy
+    command: php artisan serve --host=0.0.0.0 --port=${PORT}
+
+  laravel-mysql:
+    container_name: laravel-mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - 3307:${DB_PORT}
+    networks:
+      - laravel-network
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: 'utc'
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+
+      test: ['CMD', 'mysqladmin', '-u${DB_USER}', '-p${DB_PASSWORD}', 'ping']
+      interval: 5s
+      retries: 3
+      timeout: 3s
+
+  laravel-redis:
+    container_name: laravel-redis
+    image: redis:alpine
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    ports:
+      - 6380:${REDIS_PORT}
+    networks:
+      - laravel-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      retries: 3
+      timeout: 3s
+
+volumes:
+  mysql:
+    name: laravel-mysql
+  redis:
+    name: laravel-redis
+
+networks:
+  laravel-network:
+    name: laravel-network
+    driver: bridge
